@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from typing import Any, Dict, List
 
 from spektor.interactive import main as interactive_main
@@ -101,9 +100,10 @@ def handle_query(args: argparse.Namespace) -> int:
         print(json.dumps(document, ensure_ascii=False, indent=2))
         return 0
     client = _create_client(args)
-    question = " ".join(args.question).strip()
+    question_parts = args.question or []
+    question = " ".join(question_parts).strip()
     if not question:
-        print("A question is required for the query command.")
+        print("A question is required. Provide one with --question.")
         return 1
     response = answer_query(
         document,
@@ -124,47 +124,75 @@ def handle_interactive(args: argparse.Namespace) -> int:
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="spektor")
-    subparsers = parser.add_subparsers(dest="command")
 
-    collect_p = subparsers.add_parser("collect", help="Collect system information")
-    collect_p.add_argument("--output", help="Destination file for JSON output")
-    collect_p.add_argument("--debug", action="store_true", help="Enable debug artifact capture")
-    collect_p.add_argument("--raw-dir", help="Directory for raw command output")
-    collect_p.add_argument("--timeout", type=int, default=5, help="Command timeout seconds")
-    collect_p.set_defaults(func=handle_collect)
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument(
+        "--collect",
+        action="store_true",
+        help="Collect system information from the current machine",
+    )
+    actions.add_argument(
+        "--report",
+        action="store_true",
+        help="Generate an LLM assisted report from a JSON document",
+    )
+    actions.add_argument(
+        "--question",
+        nargs="+",
+        metavar="WORD",
+        help="Ask an ad-hoc question about a JSON document",
+    )
+    actions.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Launch the interactive shell",
+    )
 
-    common_llm = {
-        "--model": {"default": DEFAULT_MODEL, "help": "Ollama model name"},
-        "--server": {"default": DEFAULT_BASE_URL, "help": "Ollama server URL"},
-        "--show-thinking": {"action": "store_true", "help": "Display <thinking> blocks"},
-        "--save-thinking": {"action": "store_true", "help": "Persist raw responses"},
-        "--debug": {"action": "store_true", "help": "Enable debug capture"},
-    }
-
-    report_p = subparsers.add_parser("report", help="Generate LLM assisted report")
-    report_p.add_argument("--input", required=True, help="Path to JSON document")
-    report_p.add_argument("--overview", action="store_true", help="Include system overview")
-    report_p.add_argument("--section", action="append", help="Analyse named section", metavar="NAME")
-    report_p.add_argument("--json-only", action="store_true", help="Print JSON and skip LLM")
-    report_p.add_argument("--system-prompt", help="Override system prompt (path or text)")
-    for flag, options in common_llm.items():
-        report_p.add_argument(flag, **options)
-    report_p.set_defaults(func=handle_report)
-
-    query_p = subparsers.add_parser("query", help="Answer ad-hoc question")
-    query_p.add_argument("--input", required=True, help="Path to JSON document")
-    query_p.add_argument("--json-only", action="store_true")
-    query_p.add_argument("--system-prompt", help="Override system prompt (path or text)")
-    for flag, options in common_llm.items():
-        query_p.add_argument(flag, **options)
-    query_p.add_argument("question", nargs=argparse.REMAINDER, help="Question to answer")
-    query_p.set_defaults(func=handle_query)
-
-    interactive_p = subparsers.add_parser("interactive", help="Start interactive shell")
-    interactive_p.add_argument("--input", help="Load JSON document on start")
-    interactive_p.add_argument("--model", default=DEFAULT_MODEL)
-    interactive_p.add_argument("--server", default=DEFAULT_BASE_URL)
-    interactive_p.set_defaults(func=handle_interactive)
+    parser.add_argument("--output", help="Destination file for --collect JSON output")
+    parser.add_argument(
+        "--raw-dir", help="Directory for raw command output when using --collect"
+    )
+    parser.add_argument(
+        "--timeout", type=int, default=5, help="Command timeout seconds for --collect"
+    )
+    parser.add_argument("--input", help="Path to an existing JSON document")
+    parser.add_argument(
+        "--overview",
+        action="store_true",
+        help="Include the system overview when using --report",
+    )
+    parser.add_argument(
+        "--section",
+        action="append",
+        metavar="NAME",
+        help="Analyse a named section; repeat for multiple sections",
+    )
+    parser.add_argument(
+        "--json-only",
+        action="store_true",
+        help="Print raw JSON instead of calling the LLM",
+    )
+    parser.add_argument(
+        "--system-prompt",
+        help="Override the system prompt (path or text) for LLM operations",
+    )
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model name")
+    parser.add_argument("--server", default=DEFAULT_BASE_URL, help="Ollama server URL")
+    parser.add_argument(
+        "--show-thinking",
+        action="store_true",
+        help="Display <thinking> blocks from the LLM",
+    )
+    parser.add_argument(
+        "--save-thinking",
+        action="store_true",
+        help="Persist raw LLM responses to disk",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug capture for collectors or LLM calls",
+    )
 
     return parser
 
@@ -172,14 +200,25 @@ def create_parser() -> argparse.ArgumentParser:
 def main(argv: List[str] | None = None) -> int:
     parser = create_parser()
     args = parser.parse_args(argv)
-    if not args.command:
-        interactive_main()
-        return 0
-    func = getattr(args, "func", None)
-    if func is None:
-        parser.print_help()
-        return 1
-    return func(args)
+
+    if args.collect:
+        return handle_collect(args)
+
+    if args.report:
+        if not args.input:
+            parser.error("--report requires --input")
+        return handle_report(args)
+
+    if args.question is not None:
+        if not args.input:
+            parser.error("--question requires --input")
+        return handle_query(args)
+
+    if args.interactive:
+        return handle_interactive(args)
+
+    # Default to the interactive shell when no action is provided.
+    return handle_interactive(args)
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry

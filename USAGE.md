@@ -42,12 +42,16 @@ Toggles are available for LLM thinking controls:
 After each action the shell prints the equivalent CLI invocation to help users
 transition to scripts and automation.
 
-## CLI commands
+## CLI actions
 
-### `spektor collect`
+The CLI now uses descriptive flags instead of sub-commands. Exactly one of the
+action flags may be supplied per invocation. Running `spektor` without flags is
+equivalent to `spektor --interactive`.
+
+### Collect system information
 
 ```
-spektor collect --output system.json [--debug] [--raw-dir DIR] [--timeout N]
+spektor --collect --output system.json [--debug] [--raw-dir DIR] [--timeout N]
 ```
 
 Collects system facts on Linux hosts. When `--debug` is supplied the collector
@@ -55,10 +59,10 @@ stores raw command output inside an `artifacts/` directory (or the provided
 `--raw-dir`). The resulting JSON always includes the schema version and schema
 validation issues when present.
 
-### `spektor report`
+### Generate an LLM assisted report
 
 ```
-spektor report --input system.json [--overview] [--section NAME ...] \
+spektor --report --input system.json [--overview] [--section NAME ...] \
   [--json-only] [--model MODEL] [--server URL] [--system-prompt PROMPT] \
   [--show-thinking] [--save-thinking] [--debug]
 ```
@@ -68,10 +72,10 @@ summaries. `--json-only` skips the LLM call and prints the document. When
 `--system-prompt` is provided the value is treated as a file path if it exists,
 otherwise it is interpreted as inline prompt text.
 
-### `spektor query`
+### Ask an ad-hoc question
 
 ```
-spektor query --input system.json "Do we have an NVIDIA GPU?" \
+spektor --question "Do we have an NVIDIA GPU?" --input system.json \
   [--json-only] [--model MODEL] [--server URL] [--system-prompt PROMPT] \
   [--show-thinking] [--save-thinking] [--debug]
 ```
@@ -79,10 +83,10 @@ spektor query --input system.json "Do we have an NVIDIA GPU?" \
 Answers ad-hoc questions strictly from the JSON document. If the requested data
 is missing the response lists commands to run in order to collect it.
 
-### `spektor interactive`
+### Launch the interactive shell
 
 ```
-spektor interactive [--input system.json] [--model MODEL] [--server URL]
+spektor --interactive [--input system.json] [--model MODEL] [--server URL]
 ```
 
 Starts the REPL with optional defaults. If `--input` is provided the JSON file is
