@@ -1,6 +1,6 @@
-# Homedoc Spektor
+# HomeDoc Spektor
 
-Homedoc Spektor captures Linux system inventory data and generates reports with
+HomeDoc Spektor captures Linux system inventory data and generates reports with
 local Ollama models. The tool gathers CPU, memory, storage, firmware, and
 software facts as structured JSON then asks an LLM for summaries, section deep
 dives, or answers to ad-hoc questions.
