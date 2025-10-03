@@ -13,12 +13,18 @@ source .venv/bin/activate
 pip install -e .
 
 # Collect data into system.json
-spektor collect --output system.json
+spektor --collect --output system.json
 
 # Generate an overview report using the default model
-spektor report --input system.json --overview
+spektor --report --input system.json --overview
+
+# Ask an ad-hoc question about the collected data
+spektor --question "Do we have an NVIDIA GPU?" --input system.json
 
 # Launch the interactive REPL (default command)
+spektor --interactive
+
+# The CLI also falls back to the REPL when no flags are supplied
 spektor
 ```
 
