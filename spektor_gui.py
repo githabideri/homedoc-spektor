@@ -33,11 +33,15 @@ class SpektorGUI:
         self._command_thread: threading.Thread | None = None
 
         # Tkinter variables for CLI flags
-        self.action_var = tk.StringVar(value="interactive")
-        self.output_var = tk.StringVar()
-        self.raw_dir_var = tk.StringVar()
+        cwd = os.getcwd()
+        default_out_dir = os.path.join(cwd, "out")
+        default_raw_dir = os.path.join(default_out_dir, "raw")
+        default_document = os.path.join(default_out_dir, "system.json")
+        self.action_var = tk.StringVar(value="collect")
+        self.output_var = tk.StringVar(value=default_document)
+        self.raw_dir_var = tk.StringVar(value=default_raw_dir)
         self.timeout_var = tk.StringVar(value="5")
-        self.input_var = tk.StringVar()
+        self.input_var = tk.StringVar(value=default_document)
         self.system_prompt_var = tk.StringVar()
         self.model_var = tk.StringVar()
         self.server_var = tk.StringVar()
@@ -49,7 +53,6 @@ class SpektorGUI:
 
         # Widgets that require special handling (Text widgets do not support StringVar)
         self.section_text: tk.Text | None = None
-        self.question_text: tk.Text | None = None
 
         # Layout
         self._build_layout()
@@ -65,14 +68,12 @@ class SpektorGUI:
         container.pack(fill=tk.BOTH, expand=True)
 
         # Action selection frame
-        action_frame = ttk.LabelFrame(container, text="Primary action")
+        action_frame = ttk.LabelFrame(container, text="Workflow")
         action_frame.pack(fill=tk.X, pady=(0, 10))
 
         actions = (
-            ("Interactive shell", "interactive"),
-            ("Collect system information (--collect)", "collect"),
-            ("Generate report (--report)", "report"),
-            ("Ask a question (--question)", "question"),
+            ("Step 1: Collect system information (--collect)", "collect"),
+            ("Step 2: Generate summaries (--report)", "report"),
         )
         for text, value in actions:
             ttk.Radiobutton(action_frame, text=text, variable=self.action_var, value=value,
@@ -82,9 +83,18 @@ class SpektorGUI:
         doc_frame = ttk.LabelFrame(container, text="Document and collection options")
         doc_frame.pack(fill=tk.X, pady=(0, 10))
 
-        self._add_labeled_entry(doc_frame, "Input JSON (--input)", self.input_var, 0,
-                                browse_command=lambda: self._browse_file(self.input_var))
-        self._add_labeled_entry(doc_frame, "Output file (--output)", self.output_var, 1,
+        self._add_labeled_entry(
+            doc_frame,
+            "Step 2 input JSON (--input)",
+            self.input_var,
+            0,
+            browse_command=lambda: self._browse_file(self.input_var),
+        )
+        self._add_labeled_entry(
+            doc_frame,
+            "Step 1 output file (--output)",
+            self.output_var,
+            1,
                                 browse_command=lambda: self._browse_save_file(self.output_var))
         self._add_labeled_entry(doc_frame, "Raw directory (--raw-dir)", self.raw_dir_var, 2,
                                 browse_command=lambda: self._browse_directory(self.raw_dir_var))
@@ -93,6 +103,10 @@ class SpektorGUI:
         timeout_spin = ttk.Spinbox(doc_frame, from_=1, to=3600, textvariable=self.timeout_var, width=7)
         timeout_spin.grid(row=3, column=1, sticky=tk.W, padx=6, pady=4)
         self.timeout_spin = timeout_spin
+        ttk.Label(
+            doc_frame,
+            text="Start with Step 1 to create the JSON file, then reuse it as the Step 2 input.",
+        ).grid(row=4, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(4, 0))
 
         # Reporting options
         report_frame = ttk.LabelFrame(container, text="Reporting options")
@@ -113,14 +127,6 @@ class SpektorGUI:
         report_frame.columnconfigure(1, weight=1)
         section_text.bind("<KeyRelease>", lambda _event: self.update_command_preview())
         self.section_text = section_text
-
-        # Question options
-        question_frame = ttk.LabelFrame(container, text="Question text (--question)")
-        question_frame.pack(fill=tk.BOTH, pady=(0, 10))
-        question_text = tk.Text(question_frame, height=3)
-        question_text.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
-        question_text.bind("<KeyRelease>", lambda _event: self.update_command_preview())
-        self.question_text = question_text
 
         # LLM configuration
         llm_frame = ttk.LabelFrame(container, text="LLM configuration")
@@ -216,6 +222,9 @@ class SpektorGUI:
         # Timeout is only relevant for collection
         timeout_state = tk.NORMAL if action == "collect" else tk.DISABLED
         self.timeout_spin.configure(state=timeout_state)
+        if self.section_text is not None:
+            section_state = tk.NORMAL if action == "report" else tk.DISABLED
+            self.section_text.configure(state=section_state)
         self.update_command_preview()
 
     # ---------------------------------------------------------------- Command building
@@ -228,14 +237,6 @@ class SpektorGUI:
         sections = [line.strip() for line in text.splitlines() if line.strip()]
         return sections
 
-    def _collect_question_words(self) -> list[str]:
-        if self.question_text is None or self.action_var.get() != "question":
-            return []
-        question = self.question_text.get("1.0", tk.END).strip()
-        if not question:
-            return []
-        return question.split()
-
     def build_cli_args(self) -> list[str]:
         """Create a list of CLI arguments based on the current UI state."""
 
@@ -243,39 +244,34 @@ class SpektorGUI:
         action = self.action_var.get()
         if action == "collect":
             args.append("--collect")
+            if self.output_var.get():
+                args.extend(["--output", self.output_var.get()])
+            if self.raw_dir_var.get():
+                args.extend(["--raw-dir", self.raw_dir_var.get()])
+            if self.timeout_var.get():
+                args.extend(["--timeout", self.timeout_var.get()])
         elif action == "report":
             args.append("--report")
-        elif action == "question":
-            args.append("--question")
-            args.extend(self._collect_question_words())
-        elif action == "interactive":
-            args.append("--interactive")
+            if self.input_var.get():
+                args.extend(["--input", self.input_var.get()])
+            if self.overview_var.get():
+                args.append("--overview")
+            sections = self._collect_sections()
+            for section in sections:
+                args.extend(["--section", section])
+            if self.json_only_var.get():
+                args.append("--json-only")
+            if self.system_prompt_var.get():
+                args.extend(["--system-prompt", self.system_prompt_var.get()])
+            if self.model_var.get():
+                args.extend(["--model", self.model_var.get()])
+            if self.server_var.get():
+                args.extend(["--server", self.server_var.get()])
+            if self.show_thinking_var.get():
+                args.append("--show-thinking")
+            if self.save_thinking_var.get():
+                args.append("--save-thinking")
 
-        if self.output_var.get():
-            args.extend(["--output", self.output_var.get()])
-        if self.raw_dir_var.get():
-            args.extend(["--raw-dir", self.raw_dir_var.get()])
-        if self.timeout_var.get() and action == "collect":
-            args.extend(["--timeout", self.timeout_var.get()])
-        if self.input_var.get():
-            args.extend(["--input", self.input_var.get()])
-        if self.overview_var.get():
-            args.append("--overview")
-        sections = self._collect_sections()
-        for section in sections:
-            args.extend(["--section", section])
-        if self.json_only_var.get():
-            args.append("--json-only")
-        if self.system_prompt_var.get():
-            args.extend(["--system-prompt", self.system_prompt_var.get()])
-        if self.model_var.get():
-            args.extend(["--model", self.model_var.get()])
-        if self.server_var.get():
-            args.extend(["--server", self.server_var.get()])
-        if self.show_thinking_var.get():
-            args.append("--show-thinking")
-        if self.save_thinking_var.get():
-            args.append("--save-thinking")
         if self.debug_var.get():
             args.append("--debug")
 
@@ -305,15 +301,10 @@ class SpektorGUI:
         action = self.action_var.get()
 
         if action == "report" and not self.input_var.get():
-            messagebox.showerror("Spektor", "--report requires an input JSON file.")
+            messagebox.showerror(
+                "Spektor", "--report requires an input JSON file."
+            )
             return
-        if action == "question":
-            if not self.input_var.get():
-                messagebox.showerror("Spektor", "--question requires an input JSON file.")
-                return
-            if not self._collect_question_words():
-                messagebox.showerror("Spektor", "Please enter a question before running.")
-                return
 
         if action == "collect" and not self.timeout_var.get():
             self.timeout_var.set("5")

@@ -5,11 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from typing import Any, Dict, List
 
-from spektor.interactive import main as interactive_main
 from spektor.llm import DEFAULT_BASE_URL, DEFAULT_MODEL, OllamaClient
-from spektor.reporting import answer_query, overview, per_section
+from spektor.reporting import overview, per_section
 from spektor.sysprobe import collect as collect_probe
 from spektor.util import safe_json_dump
 
@@ -94,36 +94,17 @@ def handle_report(args: argparse.Namespace) -> int:
     return 0
 
 
-def handle_query(args: argparse.Namespace) -> int:
-    document = _load_document(args.input)
-    if args.json_only:
-        print(json.dumps(document, ensure_ascii=False, indent=2))
-        return 0
-    client = _create_client(args)
-    question_parts = args.question or []
-    question = " ".join(question_parts).strip()
-    if not question:
-        print("A question is required. Provide one with --question.")
-        return 1
-    response = answer_query(
-        document,
-        question,
-        client,
-        system_override=_resolve_system_prompt(args.system_prompt) or None,
-        show_thinking=args.show_thinking,
-        save_thinking=args.save_thinking,
-    )
-    print(response.text)
-    return 0
-
-
-def handle_interactive(args: argparse.Namespace) -> int:
-    interactive_main(input_path=args.input, model=args.model, server=args.server)
-    return 0
-
-
 def create_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="spektor")
+    description = (
+        "Collect system information and generate follow-up summaries.\n"
+        "Start with `spektor --collect` to create a JSON document.\n"
+        "Then run `spektor --report --input <file>` to ask the LLM for summaries."
+    )
+    parser = argparse.ArgumentParser(
+        prog="spektor",
+        description=description,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
@@ -134,18 +115,9 @@ def create_parser() -> argparse.ArgumentParser:
     actions.add_argument(
         "--report",
         action="store_true",
-        help="Generate an LLM assisted report from a JSON document",
-    )
-    actions.add_argument(
-        "--question",
-        nargs="+",
-        metavar="WORD",
-        help="Ask an ad-hoc question about a JSON document",
-    )
-    actions.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Launch the interactive shell",
+        help=(
+            "Generate LLM-powered summaries from a previously collected JSON document"
+        ),
     )
 
     parser.add_argument("--output", help="Destination file for --collect JSON output")
@@ -209,16 +181,13 @@ def main(argv: List[str] | None = None) -> int:
             parser.error("--report requires --input")
         return handle_report(args)
 
-    if args.question is not None:
-        if not args.input:
-            parser.error("--question requires --input")
-        return handle_query(args)
-
-    if args.interactive:
-        return handle_interactive(args)
-
-    # Default to the interactive shell when no action is provided.
-    return handle_interactive(args)
+    parser.print_help()
+    print(
+        "\nChoose an action to continue. Start with --collect, then run --report with "
+        "--input pointing at the generated JSON file.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry
