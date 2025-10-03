@@ -48,7 +48,10 @@ class OllamaClient:
         save_thinking: Optional[bool] = None,
         debug: bool = False,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
+        cleaned_url = (base_url or DEFAULT_BASE_URL).strip()
+        if "://" not in cleaned_url:
+            cleaned_url = f"http://{cleaned_url}"
+        self.base_url = cleaned_url.rstrip("/")
         self.model = model
         self.debug = debug or os.environ.get("SPEKTOR_DEBUG_LLM") == "1"
         thinking_env = os.environ.get("SPEKTOR_THINKING", "").strip().lower()
