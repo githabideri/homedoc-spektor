@@ -1,0 +1,12 @@
+{
+  "lscpu": [
+    {"field": "Architecture:", "data": "x86_64"},
+    {"field": "Model name:", "data": "Test CPU"},
+    {"field": "Vendor ID:", "data": "GenuineIntel"},
+    {"field": "Socket(s):", "data": "1"},
+    {"field": "Core(s) per socket:", "data": "4"},
+    {"field": "Thread(s) per core:", "data": "2"},
+    {"field": "CPU(s):", "data": "8"},
+    {"field": "Flags:", "data": "fpu sse sse2"}
+  ]
+}
