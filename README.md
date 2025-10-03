@@ -29,3 +29,16 @@ spektor
 ```
 
 See [USAGE.md](USAGE.md) for detailed CLI and REPL instructions.
+
+## GUI helper
+
+A Tkinter-based helper is available for people who prefer a visual interface.
+It exposes the same options as the CLI and shows the equivalent command as you
+toggle settings, making it easy to copy/paste the flags you need.
+
+```bash
+python spektor_gui.py
+```
+
+The GUI can also execute the assembled command directly and will display the
+output in the window.
