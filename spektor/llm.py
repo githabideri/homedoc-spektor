@@ -10,6 +10,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse, urlunparse
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -17,6 +18,19 @@ from .util import now_iso, safe_json_dump, sha256_text
 
 DEFAULT_MODEL = "gemma3:12b"
 DEFAULT_BASE_URL = "http://localhost:11434"
+
+
+def _default_port() -> int:
+    try:
+        parsed = urlparse(DEFAULT_BASE_URL)
+        if parsed and parsed.port:
+            return parsed.port
+    except Exception:
+        pass
+    return 11434
+
+
+DEFAULT_PORT = _default_port()
 DEBUG_DIR = pathlib.Path("debug")
 
 
@@ -51,6 +65,22 @@ class OllamaClient:
         cleaned_url = (base_url or DEFAULT_BASE_URL).strip()
         if "://" not in cleaned_url:
             cleaned_url = f"http://{cleaned_url}"
+
+        parsed = urlparse(cleaned_url)
+        if parsed.scheme in {"http", "https"} and parsed.hostname and parsed.port is None:
+            host = parsed.hostname
+            if ":" in host and not host.startswith("["):
+                host = f"[{host}]"
+            netloc = host
+            if parsed.username:
+                auth = parsed.username
+                if parsed.password:
+                    auth += f":{parsed.password}"
+                netloc = f"{auth}@{netloc}"
+            netloc = f"{netloc}:{DEFAULT_PORT}"
+            parsed = parsed._replace(netloc=netloc)
+        cleaned_url = urlunparse(parsed)
+
         self.base_url = cleaned_url.rstrip("/")
         self.model = model
         self.debug = debug or os.environ.get("SPEKTOR_DEBUG_LLM") == "1"
