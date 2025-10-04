@@ -1,96 +1,56 @@
 # Usage
 
-Homedoc Spektor ships with both non-interactive commands and an interactive
-shell. Install the package (`pip install -e .`) or invoke via `python
-spektor-cli.py` from the repository root.
+Homedoc Spektor provides a straightforward two-step workflow driven by the
+command-line interface. Install the package (`pip install -e .`) or invoke the
+CLI directly with `python spektor-cli.py` from the repository root.
 
-## Interactive shell
+## Workflow overview
 
-Running `spektor` with no arguments launches the REPL. The startup flow prompts
-for the Ollama server URL and model. Defaults are:
+1. **Collect** system information and write it to a JSON document.
+2. **Generate summaries** from that JSON using a local Ollama model.
 
-- server: `http://localhost:11434`
-- model: `gemma3:12b`
+Every run must choose exactly one of the high-level actions: `--collect` for
+step 1 or `--report` for step 2. Running `spektor` with no flags now prints the
+help text instead of launching an interactive shell.
 
-Available model shortcuts:
-
-1. `gemma3:12b` (default)
-2. `qwen3:14b` (thinking model)
-3. `mistral:7b` (~4 GB)
-4. `other` (enter a custom model name)
-
-### REPL commands
+## Step 1 – Collect system information
 
 ```
-collect [--debug] [--raw-dir DIR] [--timeout N]
-load <path>
-save <path>
-overview
-section <name[,name]>
-ask <question>
-show [json.path]
-quit
+spektor --collect --output out/system.json [--debug] [--raw-dir DIR] [--timeout N]
 ```
 
-Toggles are available for LLM thinking controls:
+Collects system facts on Linux hosts and saves them as JSON. Useful options:
+
+- `--output` — path to the resulting JSON file. If omitted, the document is
+  printed to stdout.
+- `--raw-dir` — capture raw command output for later inspection. Defaults to the
+  value configured in the GUI (`./out/raw`).
+- `--timeout` — per-command timeout in seconds (default: `5`).
+- `--debug` — enable verbose capture for collectors, mirroring the CLI output in
+  the debug artifacts directory.
+
+## Step 2 – Generate LLM summaries
 
 ```
-:show-thinking on|off
-:save-thinking on|off
-```
-
-After each action the shell prints the equivalent CLI invocation to help users
-transition to scripts and automation.
-
-## CLI actions
-
-The CLI now uses descriptive flags instead of sub-commands. Exactly one of the
-action flags may be supplied per invocation. Running `spektor` without flags is
-equivalent to `spektor --interactive`.
-
-### Collect system information
-
-```
-spektor --collect --output system.json [--debug] [--raw-dir DIR] [--timeout N]
-```
-
-Collects system facts on Linux hosts. When `--debug` is supplied the collector
-stores raw command output inside an `artifacts/` directory (or the provided
-`--raw-dir`). The resulting JSON always includes the schema version and schema
-validation issues when present.
-
-### Generate an LLM assisted report
-
-```
-spektor --report --input system.json [--overview] [--section NAME ...] \
+spektor --report --input out/system.json [--overview] [--section NAME ...] \
   [--json-only] [--model MODEL] [--server URL] [--system-prompt PROMPT] \
   [--show-thinking] [--save-thinking] [--debug]
 ```
 
-Reads a saved JSON document and uses the Ollama model to produce human-friendly
-summaries. `--json-only` skips the LLM call and prints the document. When
-`--system-prompt` is provided the value is treated as a file path if it exists,
-otherwise it is interpreted as inline prompt text.
+Reads the saved JSON document and asks an Ollama model to produce
+human-friendly summaries. `--input` is required. Helpful modifiers:
 
-### Ask an ad-hoc question
-
-```
-spektor --question "Do we have an NVIDIA GPU?" --input system.json \
-  [--json-only] [--model MODEL] [--server URL] [--system-prompt PROMPT] \
-  [--show-thinking] [--save-thinking] [--debug]
-```
-
-Answers ad-hoc questions strictly from the JSON document. If the requested data
-is missing the response lists commands to run in order to collect it.
-
-### Launch the interactive shell
-
-```
-spektor --interactive [--input system.json] [--model MODEL] [--server URL]
-```
-
-Starts the REPL with optional defaults. If `--input` is provided the JSON file is
-loaded automatically after startup.
+- `--overview` — request a high-level overview. If no other summarisation
+  options are supplied the overview is generated automatically.
+- `--section` — analyse specific sections. Repeat the flag to include multiple
+  section names.
+- `--json-only` — skip the LLM call and print the raw JSON document.
+- `--model` / `--server` — choose the Ollama model and base URL.
+- `--system-prompt` — override the system prompt. If the argument is a file path
+  the contents are used; otherwise the string is passed directly to the model.
+- `--show-thinking` — display `<thinking>` blocks returned by the model.
+- `--save-thinking` — store raw LLM responses alongside other debug artifacts.
+- `--debug` — capture detailed Ollama request/response metadata.
 
 ## Environment variables
 
