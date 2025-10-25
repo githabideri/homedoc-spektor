@@ -14,23 +14,62 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 from urllib.parse import urlparse, urlunparse
 
 try:
-    from spektor.llm import DEFAULT_BASE_URL, DEFAULT_MODEL
+    from spektor.llm import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_PORT
 except Exception:  # pragma: no cover - import fallback for partial installs
     DEFAULT_BASE_URL = ""
     DEFAULT_MODEL = ""
 
+try:
+    from spektor.util import DEFAULT_TIMEOUT
+except Exception:  # pragma: no cover - fallback when package not installed
+    DEFAULT_TIMEOUT = 5
 
-def _default_server_port() -> int:
+try:
+    from spektor.cli import default_namespace as _cli_default_namespace
+except Exception:  # pragma: no cover - fallback when CLI helpers unavailable
+    CLI_DEFAULTS = None
+else:
     try:
-        parsed = urlparse(DEFAULT_BASE_URL)
-        if parsed and parsed.port:
-            return parsed.port
-    except Exception:
-        pass
-    return 11434
+        CLI_DEFAULTS = _cli_default_namespace()
+    except SystemExit:
+        CLI_DEFAULTS = None
+
+CLI_DEFAULT_TIMEOUT_INT = DEFAULT_TIMEOUT
+CLI_DEFAULT_MODEL = DEFAULT_MODEL or ""
+CLI_DEFAULT_SERVER = DEFAULT_BASE_URL or ""
+if CLI_DEFAULTS is not None:
+    CLI_DEFAULT_TIMEOUT_INT = getattr(CLI_DEFAULTS, "timeout", DEFAULT_TIMEOUT)
+    CLI_DEFAULT_MODEL = (getattr(CLI_DEFAULTS, "model", CLI_DEFAULT_MODEL) or "")
+    CLI_DEFAULT_SERVER = (getattr(CLI_DEFAULTS, "server", CLI_DEFAULT_SERVER) or "")
+
+CLI_DEFAULT_TIMEOUT_STR = str(CLI_DEFAULT_TIMEOUT_INT)
 
 
-DEFAULT_SERVER_PORT = _default_server_port()
+def _normalize_server_input(value: str) -> str:
+    if not value:
+        return ""
+
+    url = value if "://" in value else f"http://{value}"
+    parsed = urlparse(url)
+
+    if parsed.scheme in {"http", "https"} and parsed.hostname and parsed.port is None:
+        host = parsed.hostname
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        netloc = host
+        if parsed.username:
+            auth = parsed.username
+            if parsed.password:
+                auth += f":{parsed.password}"
+            netloc = f"{auth}@{netloc}"
+        netloc = f"{netloc}:{DEFAULT_PORT}"
+        parsed = parsed._replace(netloc=netloc)
+
+    normalized = urlunparse(parsed)
+    return normalized.rstrip("/")
+
+
+CLI_DEFAULT_SERVER_NORMALIZED = _normalize_server_input(CLI_DEFAULT_SERVER)
 
 
 SCRIPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spektor-cli.py")
@@ -55,11 +94,11 @@ class SpektorGUI:
         self.action_var = tk.StringVar(value="collect")
         self.output_var = tk.StringVar(value=default_document)
         self.raw_dir_var = tk.StringVar(value=default_raw_dir)
-        self.timeout_var = tk.StringVar(value="5")
+        self.timeout_var = tk.StringVar(value=CLI_DEFAULT_TIMEOUT_STR)
         self.input_var = tk.StringVar(value=default_document)
         self.system_prompt_var = tk.StringVar()
-        self.model_var = tk.StringVar(value=DEFAULT_MODEL or "")
-        self.server_var = tk.StringVar(value=DEFAULT_BASE_URL or "")
+        self.model_var = tk.StringVar(value=CLI_DEFAULT_MODEL)
+        self.server_var = tk.StringVar(value=CLI_DEFAULT_SERVER)
         self.overview_var = tk.BooleanVar()
         self.json_only_var = tk.BooleanVar()
         self.show_thinking_var = tk.BooleanVar()
@@ -391,7 +430,13 @@ class SpektorGUI:
                 args.extend(["--raw-dir", raw_dir])
             timeout_value = self.timeout_var.get().strip()
             if timeout_value:
-                args.extend(["--timeout", timeout_value])
+                try:
+                    timeout_int = int(timeout_value)
+                except ValueError:
+                    args.extend(["--timeout", timeout_value])
+                else:
+                    if timeout_int != CLI_DEFAULT_TIMEOUT_INT:
+                        args.extend(["--timeout", timeout_value])
         elif action == "report":
             args.append("--report")
             input_path = self.input_var.get().strip()
@@ -408,10 +453,10 @@ class SpektorGUI:
             if system_prompt:
                 args.extend(["--system-prompt", system_prompt])
             model_value = self.model_var.get().strip()
-            if model_value:
+            if model_value and model_value != CLI_DEFAULT_MODEL:
                 args.extend(["--model", model_value])
             server_value = self._normalized_server_value()
-            if server_value:
+            if server_value and server_value != CLI_DEFAULT_SERVER_NORMALIZED:
                 args.extend(["--server", server_value])
             if self.show_thinking_var.get():
                 args.append("--show-thinking")
@@ -433,28 +478,7 @@ class SpektorGUI:
     def _normalized_server_value(self) -> str:
         """Normalise the server input and ensure a default port is present."""
 
-        value = self.server_var.get().strip()
-        if not value:
-            return ""
-
-        url = value if "://" in value else f"http://{value}"
-        parsed = urlparse(url)
-
-        if parsed.scheme in {"http", "https"} and parsed.hostname and parsed.port is None:
-            host = parsed.hostname
-            if ":" in host and not host.startswith("["):
-                host = f"[{host}]"
-            netloc = host
-            if parsed.username:
-                auth = parsed.username
-                if parsed.password:
-                    auth += f":{parsed.password}"
-                netloc = f"{auth}@{netloc}"
-            netloc = f"{netloc}:{DEFAULT_SERVER_PORT}"
-            parsed = parsed._replace(netloc=netloc)
-
-        normalized = urlunparse(parsed)
-        return normalized.rstrip("/")
+        return _normalize_server_input(self.server_var.get().strip())
 
     def update_command_preview(self) -> None:
         """Refresh the command preview entry."""
@@ -504,7 +528,7 @@ class SpektorGUI:
             return
 
         if action == "collect" and not self.timeout_var.get().strip():
-            self.timeout_var.set("5")
+            self.timeout_var.set(CLI_DEFAULT_TIMEOUT_STR)
             args = self.build_cli_args()
 
         command = [sys.executable, SCRIPT_PATH] + args

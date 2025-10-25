@@ -34,3 +34,7 @@ python spektor_gui.py
 
 The GUI can also execute the assembled command directly and will display the
 output in the window.
+
+The helper reads its initial values straight from the CLI parser, so whenever
+defaults (like the Ollama model, server URL, or timeout) change in the core
+tooling the GUI reflects them automatically.

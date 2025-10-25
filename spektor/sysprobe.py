@@ -11,7 +11,7 @@ import socket
 from typing import Any, Dict, Iterable, List, Optional
 
 from . import schema
-from .util import now_iso, run_cmd, safe_json_dump, which
+from .util import DEFAULT_TIMEOUT, now_iso, run_cmd, safe_json_dump, which
 
 RAW_DIR_NAME = "artifacts"
 
@@ -380,7 +380,11 @@ def _extras_collection(collector: Collector, extras: List[str]) -> Dict[str, Any
     return payload
 
 
-def collect(debug: bool = False, raw_dir: str | None = None, timeout: int = 5) -> Dict[str, Any]:
+def collect(
+    debug: bool = False,
+    raw_dir: str | None = None,
+    timeout: int = DEFAULT_TIMEOUT,
+) -> Dict[str, Any]:
     """Collect system information returning a schema compliant document."""
 
     doc = schema.new_document()

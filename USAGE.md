@@ -25,7 +25,7 @@ Collects system facts on Linux hosts and saves them as JSON. Useful options:
   printed to stdout.
 - `--raw-dir` — capture raw command output for later inspection. Defaults to the
   value configured in the GUI (`./out/raw`).
-- `--timeout` — per-command timeout in seconds (default: `5`).
+- `--timeout` — per-command timeout in seconds (default: `5`, shared with the GUI via the CLI parser).
 - `--debug` — enable verbose capture for collectors, mirroring the CLI output in
   the debug artifacts directory.
 
@@ -51,6 +51,8 @@ human-friendly summaries. `--input` is required. Helpful modifiers:
 - `--show-thinking` — display `<thinking>` blocks returned by the model.
 - `--save-thinking` — store raw LLM responses alongside other debug artifacts.
 - `--debug` — capture detailed Ollama request/response metadata.
+
+These defaults are defined once in the CLI parser, so both the command line and GUI stay in sync when you adjust them.
 
 ## Environment variables
 
