@@ -24,7 +24,7 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-spektor = "spektor-cli:main"
+spektor = "spektor.cli:main"
 
 [tool.setuptools]
 packages = ["spektor"]
