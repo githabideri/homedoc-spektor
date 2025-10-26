@@ -11,6 +11,8 @@ deep dives.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
+# or include developer tooling
+pip install -e '.[dev]'
 
 # Collect data into out/system.json
 spektor --collect --output out/system.json
